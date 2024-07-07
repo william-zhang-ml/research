@@ -4,6 +4,18 @@ import torch
 from torch import nn
 
 
+def count_params(module: nn.Module) -> int:
+    """Count the number of trainable module parameters.
+
+    Args:
+        module (nn.Module): module of interest
+
+    Returns:
+        int: number of trainable parameters
+    """
+    return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+
 def jitter_conv2d_weights(
     module: nn.Module,
     stdev: float = 1e-3,

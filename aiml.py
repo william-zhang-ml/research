@@ -2,6 +2,7 @@
 from copy import deepcopy
 import torch
 from torch import nn
+from torch.nn.functional import cross_entropy
 
 
 def count_params(module: nn.Module) -> int:
@@ -41,3 +42,22 @@ def jitter_conv2d_weights(
         else:
             jitter_conv2d_weights(submodule, stdev, True)
     return module
+
+
+def cross_entropy_w_pseudolabels(
+    softlabels: torch.Tensor,
+    logits: torch.Tensor,
+    thresh: float = 0.,
+    reduction: str = 'mean'
+) -> torch.Tensor:
+    """Compute cross entropy using pseudolabels.
+
+    Args:
+        softlabels (torch.Tensor): batch of sum-to-1 soft labels
+        logits (torch.Tensor): logits to evaluate
+        thresh (float): soft label score required to use a sample
+        reduction (str): reduction to apply to output
+    """
+    pseudoscores, pseudolabels = softlabels.max(dim=-1)
+    use = pseudoscores > thresh
+    return cross_entropy(logits[use], pseudolabels[use], reduction=reduction)

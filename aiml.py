@@ -2,7 +2,7 @@
 from copy import deepcopy
 import torch
 from torch import nn
-from torch.nn.functional import cross_entropy
+from torch.nn.functional import cross_entropy, normalize
 
 
 def count_params(module: nn.Module) -> int:
@@ -60,4 +60,28 @@ def cross_entropy_w_pseudolabels(
     """
     pseudoscores, pseudolabels = softlabels.max(dim=-1)
     use = pseudoscores > thresh
-    return cross_entropy(logits[use], pseudolabels[use], reduction=reduction)
+    loss = cross_entropy(logits[use], pseudolabels[use], reduction=reduction)
+    return loss
+
+
+def minimum_class_confusion(
+    logits: torch.Tensor,
+    temperature: float = 1.
+) -> torch.Tensor:
+    """Compute minimum class confusion loss.
+
+    Args:
+        logits (torch.Tensor): classification logits
+        temperature (float): softmax scaling value
+
+    Returns:
+        torch.Tensor: class confusion loss
+    """
+    assert logits.ndim == 2
+    scores = logits.div(temperature).softmax(dim=1)
+    certainty = scores.mul(scores.log()).sum(dim=1, keepdim=True)
+    weight = certainty.add(1).softmax(dim=1).mul(logits.shape[0])
+    confusion = weight.mul(scores).T.matmul(scores)
+    confusion = normalize(confusion, p=1, dim=1)
+    loss = confusion.sum().sub(confusion.trace()).div(logits.shape[1])
+    return loss

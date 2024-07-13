@@ -2,6 +2,7 @@
 from copy import deepcopy
 import torch
 from torch import nn
+from torch.autograd import Function
 from torch.nn.functional import cross_entropy, normalize
 
 
@@ -85,3 +86,30 @@ def minimum_class_confusion(
     confusion = normalize(confusion, p=1, dim=1)
     loss = confusion.sum().sub(confusion.trace()).div(logits.shape[1])
     return loss
+
+
+class GradientReversalNode(Function):
+    """Utility that reverses gradients during backpropagation. """
+    @staticmethod
+    def forward(_, inp: torch.Tensor) -> torch.Tensor:
+        """No-op function (required by API).
+
+        Args:
+            inp (torch.Tensor): some tensor
+
+        Returns:
+            torch.Tensor: unchanged tensor
+        """
+        return inp
+
+    @staticmethod
+    def backward(_, gradient: torch.Tensor) -> torch.Tensor:
+        """Reverse gradients.
+
+        Args:
+            gradient (torch.Tensor): some tensor's gradient
+
+        Returns:
+            torch.Tensor: negative gradient
+        """
+        return gradient.neg()

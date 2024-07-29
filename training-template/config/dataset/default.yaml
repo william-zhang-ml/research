@@ -1,0 +1,11 @@
+# meant for use with torchvision.transforms
+preprocess:
+  - module: torchvision.transforms
+    class_name: ToTensor
+
+train:
+  module: torchvision.datasets
+  class_name: CIFAR10
+  kwargs:
+    root: /path/to/data/root'
+    train: true

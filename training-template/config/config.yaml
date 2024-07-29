@@ -1,0 +1,11 @@
+defaults:
+  - dataset: default       # CIFAR10
+  - model: default         # ResNet18
+  - _self_
+
+device: cuda:0
+batch_size: 128
+
+hydra:
+  run:
+    dir: ./runs/${now:%Y%m%d-%H%M%S}

@@ -7,6 +7,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose
 from tqdm import tqdm
 
@@ -138,6 +139,8 @@ def main(config: DictConfig = None) -> None:
     """
     logging.info('running with torch %s', torch.__version__)
     outdir = Path(HydraConfig.get().runtime.output_dir)
+    train_board = SummaryWriter(log_dir=f'tensorboard/train-{outdir.stem}')
+    valid_board = SummaryWriter(log_dir=f'tensorboard/valid-{outdir.stem}')
     device = torch.device(config.device)
 
     # get dataset and batch loaders
@@ -209,6 +212,10 @@ def main(config: DictConfig = None) -> None:
             optimizer.step()
 
             # logging and user feedback
+            for key, val in losses.items():
+                train_board.add_scalar(key, val, step)
+            for key, val in metric_vals.items():
+                train_board.add_scalar(key, val, step)
             progbar.set_postfix({'batch': f'{i_batch + 1}/{num_batches}'})
 
             if config.plumbing:
@@ -217,7 +224,22 @@ def main(config: DictConfig = None) -> None:
         if 'scheduler' in locals():
             scheduler.step()
 
-    # validation
+        # periodic validation during training
+        model.eval()
+        if (i_epoch + 1) % config.epochs_per_valid == 0:
+            losses, metric_vals = do_eval_epoch(
+                valid_loader,
+                model,
+                {config.optimization.criteria.class_name: criteria},
+                {'top1': metric}
+            )
+            for key, val in losses.items():
+                valid_board.add_scalar(key, val, step)
+            for key, val in metric_vals.items():
+                valid_board.add_scalar(key, val, step)
+        model.train()
+
+    # final validation
     model.eval()
     losses, metric_vals = do_eval_epoch(
         valid_loader,

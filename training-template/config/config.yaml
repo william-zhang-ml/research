@@ -8,6 +8,7 @@ plumbing: true
 device: cuda:0
 batch_size: 128
 num_epochs: 99
+epochs_per_valid: 1
 
 hydra:
   run:

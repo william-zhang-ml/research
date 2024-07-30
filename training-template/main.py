@@ -88,6 +88,31 @@ def do_forward_pass(
     return losses, metric_vals
 
 
+def log_dict(to_log: Dict) -> None:
+    """Log dictionary key and values.
+
+    Args:
+        to_log (Dict): information to log
+    """
+    for key, val in to_log.items():
+        logging.info('%s: %f', key, val)
+
+
+def add_dict_to_board(
+    scalars: Dict[str, float],
+    board: SummaryWriter,
+    step: int
+) -> None:
+    """Add scalars to tensorboard.
+
+    Args:
+        board (SummaryWriter): tensorboard to write to
+        scalars (Dict[str, float]): information to add
+        step (int): global step
+    """
+    for key, val in scalars.items():
+        board.add_scalar(key, val, step)
+
 @torch.no_grad()
 def do_eval_epoch(
     loader: torch.utils.data.DataLoader,
@@ -212,10 +237,8 @@ def main(config: DictConfig = None) -> None:
             optimizer.step()
 
             # logging and user feedback
-            for key, val in losses.items():
-                train_board.add_scalar(key, val, step)
-            for key, val in metric_vals.items():
-                train_board.add_scalar(key, val, step)
+            add_dict_to_board(losses, train_board, step)
+            add_dict_to_board(metric_vals, train_board, step)
             progbar.set_postfix({'batch': f'{i_batch + 1}/{num_batches}'})
 
             if config.plumbing:
@@ -233,10 +256,8 @@ def main(config: DictConfig = None) -> None:
                 {config.optimization.criteria.class_name: criteria},
                 {'top1': metric}
             )
-            for key, val in losses.items():
-                valid_board.add_scalar(key, val, step)
-            for key, val in metric_vals.items():
-                valid_board.add_scalar(key, val, step)
+            add_dict_to_board(losses, valid_board, step)
+            add_dict_to_board(metric_vals, valid_board, step)
         model.train()
 
     # final validation
@@ -248,11 +269,9 @@ def main(config: DictConfig = None) -> None:
         {'top1': metric}
     )
     logging.info('FINAL LOSSES')
-    for key, val in losses.items():
-        logging.info('%s: %f', key, val)
+    log_dict(losses)
     logging.info('FINAL METRICS')
-    for key, val in metric_vals.items():
-        logging.info('%s: %f', key, val)
+    log_dict(metric_vals)
 
     # save final model
     if not config.plumbing:

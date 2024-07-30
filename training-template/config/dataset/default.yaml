@@ -7,5 +7,12 @@ train:
   module: torchvision.datasets
   class_name: CIFAR10
   kwargs:
-    root: /path/to/data/root'
+    root: /path/to/data/root
     train: true
+
+valid:
+  module: torchvision.datasets
+  class_name: CIFAR10
+  kwargs:
+    root: /path/to/data/root
+    train: false

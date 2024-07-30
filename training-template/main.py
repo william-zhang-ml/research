@@ -2,12 +2,13 @@
 import importlib
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Tuple
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 import torch
 from torchvision.transforms import Compose
+from tqdm import tqdm
 
 
 __author__ = 'William Zhang'
@@ -32,6 +33,66 @@ def build_instance(blueprint: DictConfig, updates: Dict = None) -> Any:
     return getattr(module, blueprint.class_name)(**instance_kwargs)
 
 
+def calc_top1_acc(
+    logits: torch.Tensor,
+    labels: torch.Tensor
+) -> float:
+    """Calculate top-1 accuracy.
+
+    Args:
+        logits: network classification logits (batch_size, num_classes)
+        labels: correct category lables (batch_size, )
+
+    Returns:
+        float: top-1 accuracy as a percent
+    """
+    assert logits.ndim == 2
+    correct = logits.argmax(dim=-1) == labels
+    return 100 * correct.sum() / correct.numel()
+
+
+@torch.no_grad()
+def do_eval_epoch(
+    loader: torch.utils.data.DataLoader,
+    model: torch.nn.Module,
+    criteria: Dict[str, Callable],
+    metric: Dict[str, Callable] = None
+) -> Tuple[Any, Any]:
+    """Run validation data through the model.
+
+    Args:
+        loader (torch.utils.data.DataLoader): validation batch loader
+        model (torch.nn.Module): neural network to train/validate
+        criteria (Callable): task loss function
+        metric (Callable): task metric
+
+    Returns:
+        Tuple[Any, Any]: results of calling criteria and metric
+    """
+    device = next(model.parameters()).device
+
+    # gather outputs
+    outp = []
+    labels = []
+    for inp, target in tqdm(loader, leave=False):
+        outp.append(model(inp.to(device)).cpu())
+        labels.append(target)
+    outp, labels = torch.cat(outp), torch.cat(labels)
+
+    # compute losses and metrics
+    losses = {
+        key: loss_func(outp, labels)
+        for key, loss_func in criteria.items()
+    }
+    metric_vals = {}
+    if metric is not None:
+        metric_vals = {
+            key: metric_func(outp, labels)
+            for key, metric_func in metric.items()
+        }
+    return losses, metric_vals
+
+
 @hydra.main(version_base=None, config_path='config', config_name='config')
 def main(config: DictConfig = None) -> None:
     """Train a classifier.
@@ -39,6 +100,7 @@ def main(config: DictConfig = None) -> None:
     Args:
         config (DictConfig): script configuration
     """
+    logging.info('running with torch %s', torch.__version__)
     outdir = Path(HydraConfig.get().runtime.output_dir)
     device = torch.device(config.device)
 
@@ -55,6 +117,15 @@ def main(config: DictConfig = None) -> None:
         batch_size=config.batch_size,
         shuffle=True
     )
+    valid_data = build_instance(
+        config.dataset.valid,
+        {'transform': preprocess}
+    )
+    valid_loader = torch.utils.data.DataLoader(
+        dataset=valid_data,
+        batch_size=config.batch_size,
+        shuffle=False
+    )
     imgs, _ = next(iter(train_loader))
 
     # get model and optimizers
@@ -62,6 +133,32 @@ def main(config: DictConfig = None) -> None:
         config.model,
         {'num_classes': len(train_data.classes)}
     ).to(device)
+    criteria = build_instance(config.optimization.criteria)
+    metric = calc_top1_acc
+    optimizer = build_instance(
+        config.optimization.optimizer,
+        {'params': model.parameters()}
+    )
+    if 'scheduler' in config.optimization:
+        scheduler = build_instance(
+            config.optimization.scheduler,
+            {'optimizer': optimizer}
+        )
+
+    # validation
+    model.eval()
+    losses, metric_vals = do_eval_epoch(
+        valid_loader,
+        model,
+        {config.optimization.criteria.class_name: criteria},
+        {'top1': metric}
+    )
+    logging.info('FINAL LOSSES')
+    for key, val in losses.items():
+        logging.info('%s: %f', key, val)
+    logging.info('FINAL METIRCS')
+    for key, val in metric_vals.items():
+        logging.info('%s: %f', key, val)
 
     # save final model
     torch.onnx.export(

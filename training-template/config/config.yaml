@@ -4,8 +4,10 @@ defaults:
   - optimization: default  # Cross-Entropy, SGD, Cosine Restarts
   - _self_
 
+plumbing: true
 device: cuda:0
 batch_size: 128
+num_epochs: 99
 
 hydra:
   run:

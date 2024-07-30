@@ -47,8 +47,44 @@ def calc_top1_acc(
         float: top-1 accuracy as a percent
     """
     assert logits.ndim == 2
-    correct = logits.argmax(dim=-1) == labels
+    correct = logits.argmax(dim=-1).eq(labels)
     return 100 * correct.sum() / correct.numel()
+
+
+def do_forward_pass(
+    inp: torch.Tensor,
+    labels: torch.Tensor,
+    model: torch.nn.Module,
+    criteria: Dict[str, Callable],
+    metric: Dict[str, Callable] = None
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """Run minibatch through the model.
+
+    Args:
+        inp (torch.Tensor): input data
+        target (torch.Tensor): network target values
+        model (torch.nn.Module): neural network to train/validate
+        criteria (Dict[str, Callable]): task loss functions
+        metric (Dict[str, Callable]): task metrics
+
+    Returns:
+        Tuple[Dict, Dict]: loss values and metric values
+    """
+    device = next(model.parameters()).device
+    outp = model(inp.to(device))
+
+    # compute losses and metrics
+    losses = {
+        key: loss_func(outp, labels.to(device))
+        for key, loss_func in criteria.items()
+    }
+    metric_vals = {}
+    if metric is not None:
+        metric_vals = {
+            key: metric_func(outp.cpu(), labels)
+            for key, metric_func in metric.items()
+        }
+    return losses, metric_vals
 
 
 @torch.no_grad()
@@ -57,21 +93,21 @@ def do_eval_epoch(
     model: torch.nn.Module,
     criteria: Dict[str, Callable],
     metric: Dict[str, Callable] = None
-) -> Tuple[Any, Any]:
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
     """Run validation data through the model.
 
     Args:
         loader (torch.utils.data.DataLoader): validation batch loader
         model (torch.nn.Module): neural network to train/validate
-        criteria (Callable): task loss function
-        metric (Callable): task metric
+        criteria (Dict[str, Callable]): task loss functions
+        metric (Dict[str, Callable]): task metrics
 
     Returns:
-        Tuple[Any, Any]: results of calling criteria and metric
+        Tuple[Dict, Dict]: loss values and metric values
     """
     device = next(model.parameters()).device
 
-    # gather outputs
+    # accumulate outputs
     outp = []
     labels = []
     for inp, target in tqdm(loader, leave=False):
@@ -145,6 +181,42 @@ def main(config: DictConfig = None) -> None:
             {'optimizer': optimizer}
         )
 
+    # main training loop
+    if config.plumbing:
+        progbar = tqdm(range(5))
+    else:
+        progbar = tqdm(range(config.num_epochs))
+    num_batches = len(train_loader)
+    step = 0
+    for i_epoch in progbar:
+        for i_batch, (imgs, labels) in enumerate(train_loader):
+            step += 1
+
+            # single gradient descent step
+            with torch.autocast(device_type=device.type):
+                losses, metric_vals = do_forward_pass(
+                    imgs,
+                    labels,
+                    model,
+                    {config.optimization.criteria.class_name: criteria},
+                    {'top1': metric}
+                )
+            optimizer.zero_grad()
+            total_loss = 0
+            for curr in losses.values():
+                total_loss = total_loss + curr
+            total_loss.backward()
+            optimizer.step()
+
+            # logging and user feedback
+            progbar.set_postfix({'batch': f'{i_batch + 1}/{num_batches}'})
+
+            if config.plumbing:
+                break
+
+        if 'scheduler' in locals():
+            scheduler.step()
+
     # validation
     model.eval()
     losses, metric_vals = do_eval_epoch(
@@ -156,21 +228,22 @@ def main(config: DictConfig = None) -> None:
     logging.info('FINAL LOSSES')
     for key, val in losses.items():
         logging.info('%s: %f', key, val)
-    logging.info('FINAL METIRCS')
+    logging.info('FINAL METRICS')
     for key, val in metric_vals.items():
         logging.info('%s: %f', key, val)
 
     # save final model
-    torch.onnx.export(
-        model,
-        imgs.to(device),
-        outdir / 'final.onnx',
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={
-            'input': {0: 'batch', 1: 'row', 2: 'col'}
-        }
-    )
+    if not config.plumbing:
+        torch.onnx.export(
+            model,
+            imgs.to(device),
+            outdir / 'final.onnx',
+            input_names=['input'],
+            output_names=['output'],
+            dynamic_axes={
+                'input': {0: 'batch', 1: 'row', 2: 'col'}
+            }
+        )
 
 
 if __name__ == '__main__':

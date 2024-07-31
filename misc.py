@@ -47,3 +47,35 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     circle = stdev * np.stack([np.cos(radians), np.sin(radians)], axis=1)
     scaled_basis = np.diag(sing_val / np.sqrt(len(data))) @ basis
     return circle @ scaled_basis + samp_mean
+
+
+def gen_tsne_plot(
+    data: np.ndarray,
+    labels: Sequence[int] = None,
+    tsne_kwargs: Dict = None,
+    scatter_kwargs: Dict = None
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Project and plot a dataset with t-SNE algorithm
+    """
+    
+    # defaults
+    tsne_kwargs = {} if tsne_kwargs is None else tsne_kwargs
+    scatter_kwargs = {} if scatter_kwargs is None else scatter_kwargs
+    if 's' not in scatter_kwargs:
+        scatter_kwargs['s'] = 20
+    if 'c' not in scatter_kwargs:
+        scatter_kwargs['c'] = 'k'
+    if 'marker' not in scatter_kwargs:
+        scatter_kwargs['marker'] = '.'
+    if labels is not None:
+        scatter_kwargs['c'] = labels  # labels highest priority
+        scatter_kwargs['cmap'] = 'tab10'
+    
+    # project and plot
+    proj = TSNE(**tsne_kwargs).fit_transform(data)
+    fig, axes = plt.subplots()
+    axes.grid()
+    axes.scatter(*proj.T, **scatter_kwargs)
+    fig.tight_layout()
+
+    return fig, axes

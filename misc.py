@@ -1,6 +1,8 @@
 """Miscellaneous research code. """
-from typing import Callable
+from typing import Callable, Dict, Sequence, Tuple
+from matplotlib import pyplot as plt
 import numpy as np
+from sklearn.manifold import TSNE
 from tqdm.auto import tqdm
 
 
@@ -52,25 +54,30 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
 def gen_tsne_plot(
     data: np.ndarray,
     labels: Sequence[int] = None,
+    color: str = 'k',
+    cmap: str = 'tab10',
     tsne_kwargs: Dict = None,
-    scatter_kwargs: Dict = None
 ) -> Tuple[plt.Figure, plt.Axes]:
-    """Project and plot a dataset with t-SNE algorithm
+    """Project a dataset with t-SNE algorithm and plot.
+
+    Args:
+        data (np.ndarray): dataset to plot (num_samples, num_features)
+        labels (Sequence[int]): sample classification labels
+        color (str): marker color if no labels given
+        cmap (str): marker colormap if labels given
+        tsne_kwargs (Dict): sklearn.manifold.TSNE settings
+
+    Returns:
+        Tuple[plt.Figure, plt.Axes]: plot handles
     """
-    
-    # defaults
     tsne_kwargs = {} if tsne_kwargs is None else tsne_kwargs
-    scatter_kwargs = {} if scatter_kwargs is None else scatter_kwargs
-    if 's' not in scatter_kwargs:
-        scatter_kwargs['s'] = 20
-    if 'c' not in scatter_kwargs:
-        scatter_kwargs['c'] = 'k'
-    if 'marker' not in scatter_kwargs:
-        scatter_kwargs['marker'] = '.'
-    if labels is not None:
-        scatter_kwargs['c'] = labels  # labels highest priority
-        scatter_kwargs['cmap'] = 'tab10'
-    
+    scatter_kwargs = {
+        's': 30,
+        'c': color if labels is None else labels,
+        'marker': '.',
+        'cmap': None if labels is None else cmap
+    }
+
     # project and plot
     proj = TSNE(**tsne_kwargs).fit_transform(data)
     fig, axes = plt.subplots()

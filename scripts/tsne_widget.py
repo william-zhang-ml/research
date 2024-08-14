@@ -30,10 +30,11 @@ if __name__ == '__main__':
     proj = TSNE().fit_transform(tsne_list)
     root = tk.Tk()
     fig, (left, right) = plt.subplots(figsize=(12, 6), ncols=2)
-    left.scatter(
+    dots = left.scatter(
         *proj.T,
         s=30,
         c=label_list,
+        alpha=0.25,
         marker='.',
         cmap='tab10',
         picker=5  # enables click callbacks
@@ -52,6 +53,9 @@ if __name__ == '__main__':
 
     def update_right(idx: int) -> None:
         """Show the idx-th image. """
+        alpha = [0.25] * len(proj)
+        alpha[idx] = 1
+        dots.set_alpha(alpha)
         right.imshow(image_list[idx], cmap='gray')
         canvas.draw()
 

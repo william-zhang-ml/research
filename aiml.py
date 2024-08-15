@@ -1,5 +1,6 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
+from typing import Union
 import torch
 from torch import nn
 from torch.autograd import Function
@@ -63,6 +64,41 @@ def cross_entropy_w_pseudolabels(
     use = pseudoscores > thresh
     loss = cross_entropy(logits[use], pseudolabels[use], reduction=reduction)
     return loss
+
+
+def clip_loss(
+    a_embeddings: torch.Tensor,
+    b_embeddings: torch.Tensor,
+    temp: Union[float, torch.Tensor]
+) -> torch.Tensor:
+    """Compute cross-domain contrastive cross-entropy.
+
+    Args:
+        a_embeddings (torch.Tensor): embedding vectors from domain A
+        b_embeddings (torch.Tensor): embedding vectors from domain B
+        temp (Union[float, torch.Tensor]): log temperature (reciprocal)
+    """
+    device = a_embeddings.device
+
+    # compute cosine similarity
+    cos_sim = torch.einsum(
+        'id,jd->ij',
+        normalize(a_embeddings, p=2, dim=1),
+        normalize(b_embeddings, p=2, dim=1),
+    )
+
+    # cross-sample cross-entropy
+    assert cos_sim.shape[0] == cos_sim.shape[1]
+    labels = torch.arange(a_embeddings.shape[0], device=device)
+    if temp:
+        if isinstance(temp, float):
+            temp = torch.tensor(float, device=device)
+        logits = cos_sim * temp.exp()
+    else:
+        logits = cos_sim
+    loss_1 = cross_entropy(logits, labels)
+    loss_2 = cross_entropy(logits.T, labels)
+    return (loss_1 + loss_2) / 2
 
 
 def minimum_class_confusion(

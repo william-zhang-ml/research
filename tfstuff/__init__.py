@@ -4,6 +4,15 @@ from tensorflow.keras import layers
 from tensorflow.keras.applications import ResNet50
 
 
+def using_gpu() -> bool:
+    """Check if code sees a GPU.
+
+    Returns:
+        bool: whether code sees a GPU
+    """
+    return len(tf.config.list_physical_devices('GPU')) > 0
+
+
 def init_resnet50(num_classes: int, weights: str = 'imagenet') -> tf.Module:
     """Initialize a resnet50 model.
 

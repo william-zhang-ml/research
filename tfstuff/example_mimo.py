@@ -38,7 +38,10 @@ if __name__ == '__main__':
     # training
     model.compile(
         optimizer='sgd',
-        loss='mse'
+        loss={
+            'cls_out': 'categorical_crossentropy',
+            'aux_out': 'mse'
+        }
     )
     _ = model.fit(
         {

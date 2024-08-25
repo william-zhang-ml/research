@@ -1,6 +1,8 @@
 """Miscellaneous research code. """
-from typing import Callable
+from typing import Callable, Dict, Sequence, Tuple
+from matplotlib import pyplot as plt
 import numpy as np
+from sklearn.manifold import TSNE
 from tqdm.auto import tqdm
 
 
@@ -47,3 +49,40 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     circle = stdev * np.stack([np.cos(radians), np.sin(radians)], axis=1)
     scaled_basis = np.diag(sing_val / np.sqrt(len(data))) @ basis
     return circle @ scaled_basis + samp_mean
+
+
+def gen_tsne_plot(
+    data: np.ndarray,
+    labels: Sequence[int] = None,
+    color: str = 'k',
+    cmap: str = 'tab10',
+    tsne_kwargs: Dict = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Project a dataset with t-SNE algorithm and plot.
+
+    Args:
+        data (np.ndarray): dataset to plot (num_samples, num_features)
+        labels (Sequence[int]): sample classification labels
+        color (str): marker color if no labels given
+        cmap (str): marker colormap if labels given
+        tsne_kwargs (Dict): sklearn.manifold.TSNE settings
+
+    Returns:
+        Tuple[plt.Figure, plt.Axes]: plot handles
+    """
+    tsne_kwargs = {} if tsne_kwargs is None else tsne_kwargs
+    scatter_kwargs = {
+        's': 30,
+        'c': color if labels is None else labels,
+        'marker': '.',
+        'cmap': None if labels is None else cmap
+    }
+
+    # project and plot
+    proj = TSNE(**tsne_kwargs).fit_transform(data)
+    fig, axes = plt.subplots()
+    axes.grid()
+    axes.scatter(*proj.T, **scatter_kwargs)
+    fig.tight_layout()
+
+    return fig, axes

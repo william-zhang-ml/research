@@ -113,6 +113,7 @@ def add_dict_to_board(
     for key, val in scalars.items():
         board.add_scalar(key, val, step)
 
+
 @torch.no_grad()
 def do_eval_epoch(
     loader: torch.utils.data.DataLoader,
@@ -197,6 +198,8 @@ def main(config: DictConfig = None) -> None:
         config.model,
         {'num_classes': len(train_data.classes)}
     ).to(device)
+    if 'weights' in config.model and config.model.weights is not None:
+        model.load_state_dict(torch.load(config.model.weights))
     criteria = build_instance(config.optimization.criteria)
     metric = calc_top1_acc
     optimizer = build_instance(

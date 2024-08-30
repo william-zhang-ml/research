@@ -25,7 +25,7 @@ def main(config: DictConfig = None) -> None:
     preproc = Compose([ToTensor(), Resize((224, 224))])
     augment = Compose([RandomHorizontalFlip(), RandomVerticalFlip()])
     train_data = CIFAR100(
-        root=config.path_to_data, 
+        root=config.path_to_data,
         train=True,
         transform=Compose([preproc, augment])
     )
@@ -37,30 +37,36 @@ def main(config: DictConfig = None) -> None:
     valid_data = CIFAR100(
         root=config.path_to_data,
         train=False,
-        transform=Compose([preproc, augment])
+        transform=preproc
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_data,
         batch_size=128,
         shuffle=False
     )
-    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2).to(config.device)
+    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
     model.fc = torch.nn.Linear(model.fc.in_features, 100)
-    optimizer = torch.optim.SGD(model.fc.parameters(), lr=1e-3)
+    model.to(config.device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     criteria = torch.nn.CrossEntropyLoss()
     for train_imgs, train_labels in tqdm(train_loader):
         logits = model(train_imgs.to(config.device))
-        loss = criteria(logits, train_labels)
+        loss = criteria(logits, train_labels.to(config.device))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
     model.eval()
     with torch.no_grad():
-        for valid_imgs, valid_labels in tqdm(valid_loader):
-            logits = model(valid_imgs.to(config.device))
-            acc = (logits.argmax(dim=1) == valid_labels).float().sum()
+        valid_imgs, valid_labels = next(iter(valid_loader))
+        logits = model(valid_imgs.to(config.device))
+        acc = (
+            (logits.argmax(dim=1) == valid_labels.to(config.device))
+            .float()
+            .mean()
+        )
     logging.info(acc.item())
+    torch.save(model.state_dict(), 'weights.pt')
 
 
 if __name__ == '__main__':

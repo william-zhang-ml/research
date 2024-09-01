@@ -10,6 +10,20 @@ from sklearn.metrics import (
 )
 
 
+def add_key_prefix(data: Dict, prefix: str) -> None:
+    """Add prefix to dictionary keys IN PLACE.
+
+    Args:
+        data (Dict): dictionary to modify
+        prefix (str): prefix to prepend to keys
+    """
+    keys = list(data.keys())
+    for key in keys:
+        data[f'{prefix}{key}'] = data[key]
+    for key in keys:
+        del data[key]
+
+
 @torch.no_grad()
 def get_cls_outputs(
     model: Module,

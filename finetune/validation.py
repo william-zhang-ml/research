@@ -25,16 +25,18 @@ def get_cls_outputs(
         Dict: classification outputs
     """
     labels, scores = [], []
-    for batch_imgs, batch_labels in tqdm(loader):
+    for batch_imgs, batch_labels in tqdm(loader, leave=False):
         labels.append(batch_labels)
-        scores.append(model(batch_imgs.to(device)))
+        scores.append(model(batch_imgs.to(device)).softmax(dim=1).cpu())
         if isinstance(num_samp, int):
-            if len(labels) * len(labels[0]) > num_samp:
+            if len(labels) * len(labels[0]) >= num_samp:
                 break
     labels = torch.cat(labels).cpu().numpy()
     scores = torch.cat(scores).cpu().numpy()
     return {
         'labels': labels,
         'scores': scores,
-        'pred': scores.argmax(axis=1)
+        'pred': scores.argmax(axis=1),
+        'binary_labels': labels == 0,
+        'binary_scores':  scores[:, 0]
     }

@@ -4,6 +4,10 @@ import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+)
 
 
 @torch.no_grad()
@@ -40,3 +44,23 @@ def get_cls_outputs(
         'binary_labels': labels == 0,
         'binary_scores':  scores[:, 0]
     }
+
+
+def get_cls_metrics(outputs: Dict) -> Dict:
+    """Compute metrics from get_cls_outputs() outputs.
+
+    Args:
+        outputs (Dict): output from get_cls_outputs()
+    """
+    labels, pred, binary_labels, binary_scores = (
+        outputs['labels'],
+        outputs['pred'],
+        outputs['binary_labels'],
+        outputs['binary_scores']
+    )
+    metrics = {
+        'top1': (labels == pred).mean(),
+        'binary-prec': precision_score(binary_labels, binary_scores > 0.5),
+        'binary-recall': recall_score(binary_labels, binary_scores > 0.5)
+    }
+    return metrics

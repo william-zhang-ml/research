@@ -1,5 +1,5 @@
 """Validation shortcuts. """
-from typing import Dict
+from typing import Dict, Tuple
 import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
@@ -138,3 +138,33 @@ def get_cls_displays(outputs: Dict) -> Dict:
     displays['roc'].ax_.grid()
     displays['pr'].ax_.grid()
     return displays
+
+
+def run_cls_eval(
+    model,
+    loader,
+    device: str = 'cuda:0',
+    num_samp: int = None,
+    tag: str = None
+) -> Tuple[Dict, ...]:
+    """Run classification evaluation pipeline: inference -> metrics + graphs.
+
+    Args:
+        model (Module): model to run data through
+        loader (DataLoader): batch generator
+        device (str): device the model is on
+        num_samp (int): number of samples before exiting early
+        tag (str): tag to prepend to keys
+
+    Returns:
+        Tuple[Dict, ...]: classification outputs, metrics, displays
+    """
+    outputs = get_cls_outputs(model, loader, device, num_samp)
+    metrics = get_cls_metrics(outputs)
+    displays = get_cls_displays(outputs)
+    if isinstance(tag, str):
+        if tag[-1] != '-':
+            tag = tag + '-'
+        for data in [outputs, metrics, displays]:
+            add_key_prefix(data, tag)
+    return outputs, metrics, displays

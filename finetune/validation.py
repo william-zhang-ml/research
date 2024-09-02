@@ -5,8 +5,11 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from sklearn.metrics import (
+    ConfusionMatrixDisplay,
     precision_score,
+    PrecisionRecallDisplay,
     recall_score,
+    RocCurveDisplay
 )
 
 
@@ -65,6 +68,9 @@ def get_cls_metrics(outputs: Dict) -> Dict:
 
     Args:
         outputs (Dict): output from get_cls_outputs()
+
+    Returns:
+        Dict: classification metrics
     """
     labels, pred, binary_labels, binary_scores = (
         outputs['labels'],
@@ -72,9 +78,63 @@ def get_cls_metrics(outputs: Dict) -> Dict:
         outputs['binary_labels'],
         outputs['binary_scores']
     )
-    metrics = {
+    return {
         'top1': (labels == pred).mean(),
         'binary-prec': precision_score(binary_labels, binary_scores > 0.5),
         'binary-recall': recall_score(binary_labels, binary_scores > 0.5)
     }
-    return metrics
+
+
+def get_cls_displays(outputs: Dict) -> Dict:
+    """Draw graphs from get_cls_outputs() outputs.
+
+    Args:
+        outputs (Dict): output from get_cls_outputs()
+
+    Returns:
+        Dict: classification displays
+    """
+    labels, pred, binary_labels, binary_scores = (
+        outputs['labels'],
+        outputs['pred'],
+        outputs['binary_labels'],
+        outputs['binary_scores']
+    )
+    displays = {
+        'confmat': ConfusionMatrixDisplay.from_predictions(
+            labels, pred,
+            colorbar=False,
+            cmap='Blues',
+            include_values=max(labels) < 10,
+            normalize='true'
+        ),
+        'confmat2': ConfusionMatrixDisplay.from_predictions(
+            labels, pred,
+            colorbar=False,
+            cmap='Blues',
+            include_values=max(labels) < 10,
+            normalize=None
+        ),
+        'binary-confmat': ConfusionMatrixDisplay.from_predictions(
+            binary_labels, binary_scores > 0.5,
+            colorbar=False,
+            cmap='Blues',
+            include_values=True,
+            normalize='true'
+        ),
+        'binary-confmat2': ConfusionMatrixDisplay.from_predictions(
+            binary_labels, binary_scores > 0.5,
+            colorbar=False,
+            cmap='Blues',
+            include_values=True,
+            normalize=None
+        ),
+        'roc': RocCurveDisplay.from_predictions(binary_labels, binary_scores),
+        'pr': PrecisionRecallDisplay.from_predictions(
+            binary_labels,
+            binary_scores
+        )
+    }
+    displays['roc'].ax_.grid()
+    displays['pr'].ax_.grid()
+    return displays

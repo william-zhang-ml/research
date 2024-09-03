@@ -15,19 +15,16 @@ from torchvision.transforms import (
 from tqdm import tqdm
 
 
-@hydra.main(version_base=None, config_path='.', config_name='config')
-def main(config: DictConfig = None) -> None:
-    """Fine tune ImageNet-pretrained ResNet50 to CIFAR100.
-
-    Args:
-        config (DictConfig): script configuration
-    """
-    preproc = Compose([ToTensor(), Resize((224, 224))])
-    augment = Compose([RandomHorizontalFlip(), RandomVerticalFlip()])
+def get_data(
+    config: DictConfig,
+    preproc=None,
+    augment=None
+):
+    """Get datasets and data loaders. """
     train_data = CIFAR100(
         root=config.path_to_data,
         train=True,
-        transform=Compose([preproc, augment])
+        transform=Compose([preproc, augment]) if augment else preproc
     )
     train_loader = torch.utils.data.DataLoader(
         train_data,
@@ -44,17 +41,35 @@ def main(config: DictConfig = None) -> None:
         batch_size=128,
         shuffle=False
     )
+    return train_data, train_loader, valid_data, valid_loader
+
+
+@hydra.main(version_base=None, config_path='.', config_name='config')
+def main(config: DictConfig = None) -> None:
+    """Fine tune ImageNet-pretrained ResNet50 to CIFAR100.
+
+    Args:
+        config (DictConfig): script configuration
+    """
+    preproc = Compose([ToTensor(), Resize((224, 224))])
+    augment = Compose([RandomHorizontalFlip(), RandomVerticalFlip()])
+    _, train_loader, _, valid_loader = get_data(
+        config,
+        preproc,
+        augment
+    )
     model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
     model.fc = torch.nn.Linear(model.fc.in_features, 100)
     model.to(config.device)
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     criteria = torch.nn.CrossEntropyLoss()
-    for train_imgs, train_labels in tqdm(train_loader):
-        logits = model(train_imgs.to(config.device))
-        loss = criteria(logits, train_labels.to(config.device))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    for _ in tqdm(range(config.num_epochs)):
+        for train_imgs, train_labels in tqdm(train_loader, leave=False):
+            logits = model(train_imgs.to(config.device))
+            loss = criteria(logits, train_labels.to(config.device))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
     model.eval()
     with torch.no_grad():

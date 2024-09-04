@@ -27,6 +27,20 @@ def add_key_prefix(data: Dict, prefix: str) -> None:
         del data[key]
 
 
+def add_key_suffix(data: Dict, suffix: str) -> None:
+    """Add suffix to dictionary keys IN PLACE.
+
+    Args:
+        data (Dict): dictionary to modify
+        suffix (str): suffix to prepend to keys
+    """
+    keys = list(data.keys())
+    for key in keys:
+        data[f'{key}{suffix}'] = data[key]
+    for key in keys:
+        del data[key]
+
+
 @torch.no_grad()
 def get_cls_outputs(
     model: Module,

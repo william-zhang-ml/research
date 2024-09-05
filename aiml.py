@@ -149,3 +149,29 @@ class GradientReversalNode(Function):
             torch.Tensor: negative gradient
         """
         return gradient.neg()
+
+
+class WeightMovingAverage:
+    """Utility for updating a model that is a moving average of another. """
+    def __init__(
+        self,
+        source: nn.Module,
+        average: nn.Module,
+        momentum: float
+    ) -> None:
+        """
+        Args:
+            source (nn.Module): model being trained (ws)
+            average (nn.Module): running weight average (wa)
+            momentum (float): amount current average counts in new average (m)
+        """
+        self._source = source
+        self._average = average
+        self._momentum = momentum
+
+    def step(self) -> None:
+        """Apply moving average weight update: wa = m * wa + (1 - m) * ws. """
+        average_state = self._average.state_dict()  # references, not copies
+        for param, value in self._source.state_dict().items():
+            average_state[param] *= self._momentum
+            average_state[param] += (1 - self._momentum) * value

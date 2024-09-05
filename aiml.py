@@ -151,7 +151,7 @@ class GradientReversalNode(Function):
         return gradient.neg()
 
 
-class StudentTeacherAverager:
+class WeightMovingAverage:
     """Utility for updating a model that is a moving average of another. """
     def __init__(
         self,

@@ -1,10 +1,11 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
-from typing import Union
+from typing import Any, Union
 import torch
 from torch import nn
 from torch.autograd import Function
 from torch.nn.functional import cross_entropy, normalize
+from torch.utils.data import Dataset
 
 
 def count_params(module: nn.Module) -> int:
@@ -17,6 +18,25 @@ def count_params(module: nn.Module) -> int:
         int: number of trainable parameters
     """
     return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+
+class SubsetDataset(Dataset):
+    """Dataset wrapper that subsets the underlying dataset. """
+    def __init__(self, to_subset: Dataset, num: int = 1000) -> None:
+        """
+        Args
+            to_subset (Dataset): dataset to wrap
+            num (int): number of samples in subset
+        """
+        self._data = to_subset
+        self._num = num
+        assert len(to_subset) >= num
+
+    def __len__(self) -> int:
+        return self._num
+
+    def __getitem__(self, idx: int) -> Any:
+        return self._data[idx]
 
 
 def jitter_conv2d_weights(

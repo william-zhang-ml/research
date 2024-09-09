@@ -36,6 +36,8 @@ class SubsetDataset(Dataset):
         return self._num
 
     def __getitem__(self, idx: int) -> Any:
+        if idx >= self._num:
+            raise IndexError(f'idx {idx} o.o.b. for {self._num}-len subset')
         return self._data[idx]
 
 

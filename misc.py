@@ -1,8 +1,11 @@
 """Miscellaneous research code. """
 from typing import Callable, Dict, Sequence, Tuple
 from matplotlib import pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 from sklearn.manifold import TSNE
+import torch
+from torchvision.ops import box_convert
 from tqdm.auto import tqdm
 
 
@@ -86,3 +89,27 @@ def gen_tsne_plot(
     fig.tight_layout()
 
     return fig, axes
+
+
+def add_boxes(
+    axes: plt.Axes,
+    boxes: torch.Tensor,
+    fmt: str = 'xyxy',
+    show_idx: bool = True,
+    margin: float = 0
+) -> None:
+    """Add boxes to an axes.
+
+    Args:
+        axes (plt.Axes): axes to edit
+        boxes (torch.Tensor): boxes to add
+        fmt (str): box coordinate convention
+        show_idx (bool): whether to annotate boxes with their array index
+        margin (float): array index text offset
+    """
+    boxes = box_convert(boxes, fmt, 'xywh')
+    for i_box, box in enumerate(boxes):
+        patch = Rectangle(box[:2], box[2], box[3], color='r', fill=False)
+        axes.add_patch(patch)
+        if show_idx:
+            axes.text(box[0] + margin, box[1] + margin, i_box, color='r')

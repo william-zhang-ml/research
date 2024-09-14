@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
 from sklearn.manifold import TSNE
+from sklearn.metrics import ConfusionMatrixDisplay
 import torch
 from torchvision.ops import box_convert
 from tqdm.auto import tqdm
@@ -52,6 +53,31 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     circle = stdev * np.stack([np.cos(radians), np.sin(radians)], axis=1)
     scaled_basis = np.diag(sing_val / np.sqrt(len(data))) @ basis
     return circle @ scaled_basis + samp_mean
+
+
+def gen_confmat(
+    y_true: Sequence,
+    y_pred: Sequence
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Compute normalized confusion matrix w/prettier formatting.
+
+    Args:
+        y_true (Sequence): true labels
+        y_pred (Sequence): predicted labels
+
+    Returns:
+        Tuple[plt.Figure, plt.Axes]: figure and axes
+    """
+    disp = ConfusionMatrixDisplay.from_predictions(
+        y_true=y_true,
+        y_pred=y_pred,
+        cmap='Blues',
+        colorbar=False,
+        normalize='true'
+    )
+    top1 = 100 * (y_true == y_pred).float().mean()
+    disp.ax_.set_title(f'Top-1 {top1: .1f}%')
+    disp.figure_.tight_layout()
 
 
 def gen_tsne_plot(

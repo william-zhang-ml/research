@@ -58,7 +58,7 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
 def gen_confmat(
     y_true: Sequence,
     y_pred: Sequence
-) -> Tuple[plt.Figure, plt.Axes]:
+) -> Tuple[ConfusionMatrixDisplay, float]:
     """Compute normalized confusion matrix w/prettier formatting.
 
     Args:
@@ -66,7 +66,7 @@ def gen_confmat(
         y_pred (Sequence): predicted labels
 
     Returns:
-        Tuple[plt.Figure, plt.Axes]: figure and axes
+        Tuple[ConfusionMatrixDisplay, float]: confusion matrix, top-1 accuracy
     """
     disp = ConfusionMatrixDisplay.from_predictions(
         y_true=y_true,
@@ -78,6 +78,7 @@ def gen_confmat(
     top1 = 100 * (y_true == y_pred).float().mean()
     disp.ax_.set_title(f'Top-1 {top1: .1f}%')
     disp.figure_.tight_layout()
+    return disp, top1
 
 
 def gen_tsne_plot(

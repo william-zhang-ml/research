@@ -1,5 +1,6 @@
 """Miscellaneous research code. """
 from typing import Callable, Dict, Sequence, Tuple
+import git
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
@@ -8,6 +9,15 @@ from sklearn.metrics import ConfusionMatrixDisplay
 import torch
 from torchvision.ops import box_convert
 from tqdm.auto import tqdm
+
+
+def get_repo_hash() -> str:
+    """
+    Returns:
+        str: long hash of the repo
+    """
+    repo = git.Repo(search_parent_directories=True)
+    return repo.head.commit.hexsha
 
 
 def bootstrap(

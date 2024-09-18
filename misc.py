@@ -1,5 +1,5 @@
 """Miscellaneous research code. """
-from typing import Callable, Dict, Sequence, Tuple
+from typing import Callable, Dict, Sequence, Tuple, Union
 import git
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
@@ -42,6 +42,34 @@ def bootstrap(
         sample = np.random.choice(data, size=sample_size, replace=True)
         stats.append(statistic(sample))
     return np.array(stats)
+
+
+class EmpiricalDistribution:
+    """Sample-defined distribution utility. """
+    def __init__(self, samples: Sequence[float]) -> None:
+        if isinstance(samples, np.ndarray):
+            self._samples = np.copy(samples)
+        else:
+            self._samples = np.array(samples)
+        self._samples.sort()
+
+    def __len__(self) -> int:
+        return len(self._samples)
+
+    def cdf(
+        self,
+        query: Union[float, Sequence[float]]
+    ) -> Union[float, np.ndarray]:
+        """Compute empirical cumulative distribution function.
+
+        Args:
+            query (Union[float, Sequence[float]]): points at which to evaluate
+
+        Returns:
+            Union[float, np.ndarray]: cumulative distribution values
+        """
+        idcs = np.searchsorted(self._samples, query, 'right')
+        return idcs / len(self._samples)
 
 
 def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:

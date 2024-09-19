@@ -197,3 +197,8 @@ class WeightMovingAverage:
         for param, value in self._source.state_dict().items():
             average_state[param] *= self._momentum
             average_state[param] += (1 - self._momentum) * value
+
+
+class ModelEnsemble:
+    """Utility for working w/model ensembles"""
+    pass

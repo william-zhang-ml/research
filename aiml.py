@@ -228,7 +228,7 @@ def spectral_mixup(
     spec_b = fft.fft2(img_b)
     mag_b, phase_b = np.abs(spec_b), np.angle(spec_b)
 
-    # phase mixup
+    # mixup in frequency domain
     new_a = mag_b * np.exp(1j * phase_a)
     new_b = mag_a * np.exp(1j * phase_b)
 

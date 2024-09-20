@@ -1,6 +1,8 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
-from typing import Any, Union
+from typing import Any, Tuple, Union
+import numpy as np
+from scipy import fft
 import torch
 from torch import nn
 from torch.autograd import Function
@@ -202,3 +204,42 @@ class WeightMovingAverage:
 class ModelEnsemble:
     """Utility for working w/model ensembles"""
     pass
+
+
+def spectral_mixup(
+    img_a: np.ndarray,
+    img_b: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Swap the magnitude of two images (must be same shape).
+
+    Args:
+        img_a (np.ndarray): first image ... CHW
+        img_b (np.ndarray): second image ... CHW
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: magnitude-swapped images
+    """
+    assert img_a.shape[0] in [1, 3]
+    assert img_b.shape[0] in [1, 3]
+
+    # spectral decomposition
+    spec_a = fft.fft2(img_a)
+    mag_a, phase_a = np.abs(spec_a), np.angle(spec_a)
+    spec_b = fft.fft2(img_b)
+    mag_b, phase_b = np.abs(spec_b), np.angle(spec_b)
+
+    # phase mixup
+    new_a = mag_b * np.exp(1j * phase_a)
+    new_b = mag_a * np.exp(1j * phase_b)
+
+    # back to spatial domain and post-process
+    new_a = fft.ifft2(new_a)
+    new_a = new_a - new_a.min()
+    new_a = new_a / new_a.max()
+    new_a = np.real(new_a)
+    new_b = fft.ifft2(new_b)
+    new_b = new_b - new_b.min()
+    new_b = new_b / new_b.max()
+    new_b = np.real(new_b)
+
+    return new_a, new_b

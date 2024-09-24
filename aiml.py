@@ -1,6 +1,6 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
-from typing import Any, Tuple, Union
+from typing import Any, List, Sequence, Tuple, Union
 import numpy as np
 from scipy import fft
 import torch
@@ -201,9 +201,28 @@ class WeightMovingAverage:
             average_state[param] += (1 - self._momentum) * value
 
 
-class ModelEnsemble:
+class ModelEnsemble(nn.Module):
     """Utility for working w/model ensembles"""
-    pass
+    def __init__(
+        self,
+        models: Sequence[nn.Module],
+        copy: bool = False
+    ) -> None:
+        super().__init__()
+        if copy:
+            models = [deepcopy(curr) for curr in models]
+        self._models = nn.ModuleList(models)
+
+    def forward(self, inp: torch.Tensor) -> List[Any]:
+        """Run data through ensemble.
+
+        Args:
+            inp (torch.Tensor): input data
+
+        Returns:
+            List[Any]: list of whatever comes out of the ensemble models
+        """
+        return [curr(inp) for curr in self._models]
 
 
 def spectral_mixup(

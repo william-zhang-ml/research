@@ -14,6 +14,13 @@ def main(cfg: DictConfig = None) -> None:
     if cfg.user_note:
         logging.info('user note: % s', cfg.user_note)
 
+    logging.info('init autoencoder and discriminator')
+    encoder = None
+    decoder = None
+    discriminator = None
+
+    logging.info('training')
+
     logging.info('main ran to completion')
 
 

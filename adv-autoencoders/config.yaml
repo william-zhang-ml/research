@@ -1,1 +1,4 @@
 user_note: null
+
+device: cuda:0
+data_dir: null

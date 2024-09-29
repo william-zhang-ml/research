@@ -1,11 +1,14 @@
 """Training adversarial autoencoders. """
 import logging
+from pathlib import Path
 import sys
 import hydra
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, Resize, ToPILImage, ToTensor
 from tqdm.auto import tqdm
@@ -18,6 +21,9 @@ def main(cfg: DictConfig = None) -> None:
     Args:
         cfg (DictConfig): _description_
     """
+    outdir = Path(HydraConfig.get().runtime.output_dir)
+    train_board = SummaryWriter(log_dir=f'tensorboard/{outdir.name}-train')
+
     if cfg.user_note:
         logging.info('user note: % s', cfg.user_note)
 
@@ -60,23 +66,25 @@ def main(cfg: DictConfig = None) -> None:
 
     logging.info('training')
     progbar = tqdm(range(75))
+    step = 0
     for _ in progbar:
         for imgs, _ in tqdm(loader_train, leave=False):
+            step += 1
             imgs = imgs.view(imgs.shape[0], -1).to(cfg.device)
             latent = encoder(imgs.to(cfg.device))
             recon = decoder(latent)
             recon_loss = recon_criteria(recon, imgs)
-            loss = recon_loss
             autoenc_optimizer.zero_grad()
-            loss.backward()
+            recon_loss.backward()
             autoenc_optimizer.step()
 
-            if torch.isnan(loss):
+            if torch.isnan(recon_loss):
                 logging.error('nan loss')
                 sys.exit()
+
+            train_board.add_scalar('recon loss', recon_loss.item(), step)
         autoenc_scheduler.step()
         progbar.set_postfix({
-                'loss': loss.item(),
                 'recon loss': recon_loss.item(),
             })
         ToPILImage()(recon[0].detach().cpu().view(32, 32)).save('example.png')

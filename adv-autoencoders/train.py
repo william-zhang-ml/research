@@ -87,6 +87,8 @@ def main(cfg: DictConfig = None) -> None:
         progbar.set_postfix({
                 'recon loss': recon_loss.item(),
             })
+
+        # todo - track examples of train/valid recon and generated images
         ToPILImage()(recon[0].detach().cpu().view(32, 32)).save('example.png')
 
     logging.info('main ran to completion')

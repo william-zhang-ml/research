@@ -2,3 +2,7 @@ user_note: null
 
 device: cuda:0
 data_dir: null
+
+hydra:
+  run:
+    dir: ./runs/${hydra.job.name}/${now:%Y%m%d-%H%M%S}

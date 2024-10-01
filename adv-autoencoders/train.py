@@ -1,5 +1,6 @@
 """Training adversarial autoencoders. """
 import logging
+import os
 from pathlib import Path
 import sys
 import hydra
@@ -22,6 +23,8 @@ def main(cfg: DictConfig = None) -> None:
         cfg (DictConfig): _description_
     """
     outdir = Path(HydraConfig.get().runtime.output_dir)
+    os.mkdir(outdir / 'imgs-train')
+    os.mkdir(outdir / 'imgs-valid')
     train_board = SummaryWriter(log_dir=f'tensorboard/{outdir.name}-train')
 
     if cfg.user_note:
@@ -67,7 +70,7 @@ def main(cfg: DictConfig = None) -> None:
     logging.info('training')
     progbar = tqdm(range(75))
     step = 0
-    for _ in progbar:
+    for epoch in progbar:
         for imgs, _ in tqdm(loader_train, leave=False):
             step += 1
             imgs = imgs.view(imgs.shape[0], -1).to(cfg.device)
@@ -85,11 +88,14 @@ def main(cfg: DictConfig = None) -> None:
             train_board.add_scalar('recon loss', recon_loss.item(), step)
         autoenc_scheduler.step()
         progbar.set_postfix({
-                'recon loss': recon_loss.item(),
-            })
+            'recon loss': recon_loss.item(),
+        })
 
-        # todo - track examples of train/valid recon and generated images
-        ToPILImage()(recon[0].detach().cpu().view(32, 32)).save('example.png')
+        # track examples of train/valid reconstruction and generated images
+        (
+            ToPILImage()(recon[0].detach().cpu().view(32, 32))
+            .save(outdir / 'imgs-train' / f'{epoch + 1}.png')
+        )
 
     logging.info('main ran to completion')
 

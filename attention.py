@@ -67,11 +67,16 @@ class PreNormEncoder(nn.Module):
             nn.Linear(4 * embed_dim, embed_dim)
         )
 
-    def forward(self, inp: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inp: torch.Tensor,
+        key_padding_mask: torch.Tensor = None
+    ) -> torch.Tensor:
         """Get new feature tokens.
 
         Args:
             inp (torch.Tensor): input tokens (M, L, D)
+            key_padding_mask (torch.Tensor): which tokens are padding (M, L)
 
         Returns:
             torch.Tensor: new tokens (M, L, D)
@@ -79,7 +84,10 @@ class PreNormEncoder(nn.Module):
 
         # prenorm multihead attention
         residual = self._norm_mha(inp)
-        residual, attn = self._attn(residual, residual, residual)
+        residual, attn = self._attn(
+            residual, residual, residual,
+            key_padding_mask=key_padding_mask
+        )
         feats = inp + residual
 
         # prenorm feed-forward
@@ -118,15 +126,20 @@ class SequenceClassifier(nn.Module):
         )
         self._cls = nn.Linear(embed_dim, num_classes)
 
-    def forward(self, inp: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inp: torch.Tensor,
+        key_padding_mask: torch.Tensor = None
+    ) -> torch.Tensor:
         """Classify sequences.
 
         Args:
             inp (torch.Tensor): sequences to classify (M, L, D)
+            key_padding_mask (torch.Tensor): which tokens are padding (M, L)
 
         Returns:
             torch.Tensor: classification logits (M, K)
         """
-        feats = self._feature_extractor(inp)
+        feats = self._feature_extractor(inp, key_padding_mask)
         feats = feats[:, 0, :]  # only need 1st token
         return self._cls(feats)

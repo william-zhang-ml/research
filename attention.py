@@ -12,8 +12,25 @@ On Layer Normalization in the Transformer Architecture
 An Image iS Worth 16x16 Words: Transformers for Image Recognition at Scale
 - connected a perceptron to the first output token for classification
 """
+from typing import Sequence
 import torch
 from torch import nn
+
+
+def get_key_padding_mask(lengths: Sequence[int]) -> torch.Tensor:
+    """Get a mask that indicates which key tokens are padding.
+
+    Args:
+        lengths (Sequence[int]): lengths of key sequences
+
+    Returns:
+        torch.Tensor: key padding mask
+    """
+    max_length = max(lengths)
+    mask = torch.zeros(len(lengths), max_length)
+    for i_seq, curr in enumerate(lengths):
+        mask[i_seq, curr:] = -torch.inf
+    return mask
 
 
 # pylint: disable=too-many-instance-attributes

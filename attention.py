@@ -38,15 +38,13 @@ class PreNormEncoder(nn.Module):
     """Multihead attention encoder w/prenorm residual. """
     def __init__(
         self,
-        in_features: int,
-        emb_features: int,
+        embed_dim: int,
         num_heads: int,
         return_attn: bool = False
     ) -> None:
         """
         Args:
-            in_features (int): input token dimension
-            emb_features (int): embedding dimension
+            embed_dim (int): embedding dimension
             num_heads (int): number of attention heads
             return_attn (bool, optional): whether to return attention values
         """
@@ -54,23 +52,19 @@ class PreNormEncoder(nn.Module):
         self._return_attn = return_attn
 
         # token embeddings and multihead attention
-        self._norm_mha = nn.LayerNorm(in_features)
-        self._query_emb = nn.Linear(in_features, emb_features)
-        self._key_emb = nn.Linear(in_features, emb_features)
-        self._value_emb = nn.Linear(in_features, emb_features)
+        self._norm_mha = nn.LayerNorm(embed_dim)
         self._attn = nn.MultiheadAttention(
-            self._query_emb.out_features,
+            embed_dim=embed_dim,
             num_heads=num_heads,
             batch_first=True
         )
-        self._proj = nn.Linear(emb_features, in_features)
 
         # position-wise feed-forward network
-        self._norm_ffn = nn.LayerNorm(in_features)
+        self._norm_ffn = nn.LayerNorm(embed_dim)
         self._feedfwd = nn.Sequential(
-            nn.Linear(in_features, 4 * in_features),
+            nn.Linear(embed_dim, 4 * embed_dim),
             nn.LeakyReLU(),
-            nn.Linear(4 * in_features, in_features)
+            nn.Linear(4 * embed_dim, embed_dim)
         )
 
     def forward(self, inp: torch.Tensor) -> torch.Tensor:
@@ -84,17 +78,14 @@ class PreNormEncoder(nn.Module):
         """
 
         # prenorm multihead attention
-        feats = self._norm_mha(inp)
-        query = self._query_emb(feats)
-        key = self._key_emb(feats)
-        value = self._value_emb(feats)
-        feats, attn = self._attn(query, key, value)
-        feats = self._proj(feats)
-        feats = inp + feats
+        residual = self._norm_mha(inp)
+        residual, attn = self._attn(residual, residual, residual)
+        feats = inp + residual
 
         # prenorm feed-forward
-        feats = self._norm_ffn(feats)
-        feats = feats + self._feedfwd(feats)
+        residual = self._norm_ffn(feats)
+        residual = self._feedfwd(residual)
+        feats = feats + residual
 
         if self._return_attn:
             outp = feats, attn
@@ -108,27 +99,24 @@ class SequenceClassifier(nn.Module):
     """Attention-based classification head. """
     def __init__(
         self,
-        in_features: int,
-        emb_features: int,
+        embed_dim: int,
         num_heads: int,
         num_classes: int,
     ) -> None:
         """
         Args:
-            in_features (int): input token dimension
-            emb_features (int): embedding dimension
+            embed_dim (int): embedding dimension
             num_heads (int): number of attention heads
             num_classes (int): number of possible target classes
             return_attn (bool, optional): whether to return attention values
         """
         super().__init__()
         self._feature_extractor = PreNormEncoder(
-            in_features,
-            emb_features,
+            embed_dim,
             num_heads,
             return_attn=False
         )
-        self._cls = nn.Linear(in_features, num_classes)
+        self._cls = nn.Linear(embed_dim, num_classes)
 
     def forward(self, inp: torch.Tensor) -> torch.Tensor:
         """Classify sequences.

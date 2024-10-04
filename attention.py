@@ -12,9 +12,10 @@ On Layer Normalization in the Transformer Architecture
 An Image iS Worth 16x16 Words: Transformers for Image Recognition at Scale
 - connected a perceptron to the first output token for classification
 """
-from typing import Sequence
+from typing import Sequence, Tuple
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 
 
 def get_key_padding_mask(lengths: Sequence[int]) -> torch.Tensor:
@@ -31,6 +32,26 @@ def get_key_padding_mask(lengths: Sequence[int]) -> torch.Tensor:
     for i_seq, curr in enumerate(lengths):
         mask[i_seq, curr:] = -torch.inf
     return mask
+
+
+def pack_and_pad(
+    tokens: Sequence[torch.Tensor],
+    enforce_sorted: bool = False
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Utility for packing token sequences.
+
+    Args:
+        tokens (Sequence[torch.Tensor]): tokens sequences to pack
+        enforce_sorted (bool): whether sequences need to be length-ordered
+
+    Return:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            padded token sequences, sequence lengths, padding mask
+    """
+    packed = pack_sequence(tokens, enforce_sorted=enforce_sorted)
+    padded, lengths = pad_packed_sequence(packed, batch_first=True)
+    mask = get_key_padding_mask(lengths)
+    return padded, lengths, mask
 
 
 # pylint: disable=too-many-instance-attributes

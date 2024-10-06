@@ -12,9 +12,10 @@ On Layer Normalization in the Transformer Architecture
 An Image iS Worth 16x16 Words: Transformers for Image Recognition at Scale
 - connected a perceptron to the first output token for classification
 """
-from typing import Sequence
+from typing import Sequence, Tuple
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 
 
 def get_key_padding_mask(lengths: Sequence[int]) -> torch.Tensor:
@@ -33,20 +34,38 @@ def get_key_padding_mask(lengths: Sequence[int]) -> torch.Tensor:
     return mask
 
 
+def pack_and_pad(
+    tokens: Sequence[torch.Tensor],
+    enforce_sorted: bool = False
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Utility for packing token sequences.
+
+    Args:
+        tokens (Sequence[torch.Tensor]): tokens sequences to pack
+        enforce_sorted (bool): whether sequences need to be length-ordered
+
+    Return:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            padded token sequences, sequence lengths, padding mask
+    """
+    packed = pack_sequence(tokens, enforce_sorted=enforce_sorted)
+    padded, lengths = pad_packed_sequence(packed, batch_first=True)
+    mask = get_key_padding_mask(lengths)
+    return padded, lengths, mask
+
+
 # pylint: disable=too-many-instance-attributes
 class PreNormEncoder(nn.Module):
     """Multihead attention encoder w/prenorm residual. """
     def __init__(
         self,
-        in_features: int,
-        emb_features: int,
+        embed_dim: int,
         num_heads: int,
         return_attn: bool = False
     ) -> None:
         """
         Args:
-            in_features (int): input token dimension
-            emb_features (int): embedding dimension
+            embed_dim (int): embedding dimension
             num_heads (int): number of attention heads
             return_attn (bool, optional): whether to return attention values
         """
@@ -54,47 +73,48 @@ class PreNormEncoder(nn.Module):
         self._return_attn = return_attn
 
         # token embeddings and multihead attention
-        self._norm_mha = nn.LayerNorm(in_features)
-        self._query_emb = nn.Linear(in_features, emb_features)
-        self._key_emb = nn.Linear(in_features, emb_features)
-        self._value_emb = nn.Linear(in_features, emb_features)
+        self._norm_mha = nn.LayerNorm(embed_dim)
         self._attn = nn.MultiheadAttention(
-            self._query_emb.out_features,
+            embed_dim=embed_dim,
             num_heads=num_heads,
             batch_first=True
         )
-        self._proj = nn.Linear(emb_features, in_features)
 
         # position-wise feed-forward network
-        self._norm_ffn = nn.LayerNorm(in_features)
+        self._norm_ffn = nn.LayerNorm(embed_dim)
         self._feedfwd = nn.Sequential(
-            nn.Linear(in_features, 4 * in_features),
+            nn.Linear(embed_dim, 4 * embed_dim),
             nn.LeakyReLU(),
-            nn.Linear(4 * in_features, in_features)
+            nn.Linear(4 * embed_dim, embed_dim)
         )
 
-    def forward(self, inp: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inp: torch.Tensor,
+        key_padding_mask: torch.Tensor = None
+    ) -> torch.Tensor:
         """Get new feature tokens.
 
         Args:
             inp (torch.Tensor): input tokens (M, L, D)
+            key_padding_mask (torch.Tensor): which tokens are padding (M, L)
 
         Returns:
             torch.Tensor: new tokens (M, L, D)
         """
 
         # prenorm multihead attention
-        feats = self._norm_mha(inp)
-        query = self._query_emb(feats)
-        key = self._key_emb(feats)
-        value = self._value_emb(feats)
-        feats, attn = self._attn(query, key, value)
-        feats = self._proj(feats)
-        feats = inp + feats
+        residual = self._norm_mha(inp)
+        residual, attn = self._attn(
+            residual, residual, residual,
+            key_padding_mask=key_padding_mask
+        )
+        feats = inp + residual
 
         # prenorm feed-forward
-        feats = self._norm_ffn(feats)
-        feats = feats + self._feedfwd(feats)
+        residual = self._norm_ffn(feats)
+        residual = self._feedfwd(residual)
+        feats = feats + residual
 
         if self._return_attn:
             outp = feats, attn
@@ -108,37 +128,39 @@ class SequenceClassifier(nn.Module):
     """Attention-based classification head. """
     def __init__(
         self,
-        in_features: int,
-        emb_features: int,
+        embed_dim: int,
         num_heads: int,
         num_classes: int,
     ) -> None:
         """
         Args:
-            in_features (int): input token dimension
-            emb_features (int): embedding dimension
+            embed_dim (int): embedding dimension
             num_heads (int): number of attention heads
             num_classes (int): number of possible target classes
             return_attn (bool, optional): whether to return attention values
         """
         super().__init__()
         self._feature_extractor = PreNormEncoder(
-            in_features,
-            emb_features,
+            embed_dim,
             num_heads,
             return_attn=False
         )
-        self._cls = nn.Linear(in_features, num_classes)
+        self._cls = nn.Linear(embed_dim, num_classes)
 
-    def forward(self, inp: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inp: torch.Tensor,
+        key_padding_mask: torch.Tensor = None
+    ) -> torch.Tensor:
         """Classify sequences.
 
         Args:
             inp (torch.Tensor): sequences to classify (M, L, D)
+            key_padding_mask (torch.Tensor): which tokens are padding (M, L)
 
         Returns:
             torch.Tensor: classification logits (M, K)
         """
-        feats = self._feature_extractor(inp)
+        feats = self._feature_extractor(inp, key_padding_mask)
         feats = feats[:, 0, :]  # only need 1st token
         return self._cls(feats)

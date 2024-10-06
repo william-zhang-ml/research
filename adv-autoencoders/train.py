@@ -1,4 +1,14 @@
-"""Training adversarial autoencoders. """
+"""Training adversarial autoencoders.
+
+This script supports (eventually) every architecture from the original paper:
+https://arxiv.org/abs/1511.05644.
+
+This includes
+- autoencoder (AE)
+- adversarial autoencoder (AAE) -> AE w/discriminator
+- AAE w/noise input
+- Unsupervised, supervised, semi-supervised AAE
+"""
 import logging
 import os
 from pathlib import Path

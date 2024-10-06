@@ -1,9 +1,23 @@
 """Miscellaneous research code. """
-from typing import Callable, Dict, Sequence, Tuple
+from typing import Callable, Dict, Sequence, Tuple, Union
+import git
 from matplotlib import pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 from sklearn.manifold import TSNE
+from sklearn.metrics import ConfusionMatrixDisplay
+import torch
+from torchvision.ops import box_convert
 from tqdm.auto import tqdm
+
+
+def get_repo_hash() -> str:
+    """
+    Returns:
+        str: long hash of the repo
+    """
+    repo = git.Repo(search_parent_directories=True)
+    return repo.head.commit.hexsha
 
 
 def bootstrap(
@@ -30,6 +44,34 @@ def bootstrap(
     return np.array(stats)
 
 
+class EmpiricalDistribution:
+    """Sample-defined distribution utility. """
+    def __init__(self, samples: Sequence[float]) -> None:
+        if isinstance(samples, np.ndarray):
+            self._samples = np.copy(samples)
+        else:
+            self._samples = np.array(samples)
+        self._samples.sort()
+
+    def __len__(self) -> int:
+        return len(self._samples)
+
+    def cdf(
+        self,
+        query: Union[float, Sequence[float]]
+    ) -> Union[float, np.ndarray]:
+        """Compute empirical cumulative distribution function.
+
+        Args:
+            query (Union[float, Sequence[float]]): points at which to evaluate
+
+        Returns:
+            Union[float, np.ndarray]: cumulative distribution values
+        """
+        idcs = np.searchsorted(self._samples, query, 'right')
+        return idcs / len(self._samples)
+
+
 def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     """Estimate a data-aligned/centered contour using SVD/PCA/whitening math.
 
@@ -49,6 +91,32 @@ def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     circle = stdev * np.stack([np.cos(radians), np.sin(radians)], axis=1)
     scaled_basis = np.diag(sing_val / np.sqrt(len(data))) @ basis
     return circle @ scaled_basis + samp_mean
+
+
+def gen_confmat(
+    y_true: Sequence,
+    y_pred: Sequence
+) -> Tuple[ConfusionMatrixDisplay, float]:
+    """Compute normalized confusion matrix w/prettier formatting.
+
+    Args:
+        y_true (Sequence): true labels
+        y_pred (Sequence): predicted labels
+
+    Returns:
+        Tuple[ConfusionMatrixDisplay, float]: confusion matrix, top-1 accuracy
+    """
+    disp = ConfusionMatrixDisplay.from_predictions(
+        y_true=y_true,
+        y_pred=y_pred,
+        cmap='Blues',
+        colorbar=False,
+        normalize='true'
+    )
+    top1 = 100 * (y_true == y_pred).float().mean()
+    disp.ax_.set_title(f'Top-1 {top1: .1f}%')
+    disp.figure_.tight_layout()
+    return disp, top1
 
 
 def gen_tsne_plot(
@@ -86,3 +154,27 @@ def gen_tsne_plot(
     fig.tight_layout()
 
     return fig, axes
+
+
+def add_boxes(
+    axes: plt.Axes,
+    boxes: torch.Tensor,
+    fmt: str = 'xyxy',
+    show_idx: bool = True,
+    margin: float = 0
+) -> None:
+    """Add boxes to an axes.
+
+    Args:
+        axes (plt.Axes): axes to edit
+        boxes (torch.Tensor): boxes to add
+        fmt (str): box coordinate convention
+        show_idx (bool): whether to annotate boxes with their array index
+        margin (float): array index text offset
+    """
+    boxes = box_convert(boxes, fmt, 'xywh')
+    for i_box, box in enumerate(boxes):
+        patch = Rectangle(box[:2], box[2], box[3], color='r', fill=False)
+        axes.add_patch(patch)
+        if show_idx:
+            axes.text(box[0] + margin, box[1] + margin, i_box, color='r')

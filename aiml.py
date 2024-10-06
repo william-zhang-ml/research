@@ -1,10 +1,13 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
-from typing import Union
+from typing import Any, List, Sequence, Tuple, Union
+import numpy as np
+from scipy import fft
 import torch
 from torch import nn
 from torch.autograd import Function
 from torch.nn.functional import cross_entropy, normalize
+from torch.utils.data import Dataset
 
 
 def count_params(module: nn.Module) -> int:
@@ -17,6 +20,27 @@ def count_params(module: nn.Module) -> int:
         int: number of trainable parameters
     """
     return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+
+class SubsetDataset(Dataset):
+    """Dataset wrapper that subsets the underlying dataset. """
+    def __init__(self, to_subset: Dataset, num: int = 1000) -> None:
+        """
+        Args
+            to_subset (Dataset): dataset to wrap
+            num (int): number of samples in subset
+        """
+        self._data = to_subset
+        self._num = num
+        assert len(to_subset) >= num
+
+    def __len__(self) -> int:
+        return self._num
+
+    def __getitem__(self, idx: int) -> Any:
+        if idx >= self._num:
+            raise IndexError(f'idx {idx} o.o.b. for {self._num}-len subset')
+        return self._data[idx]
 
 
 def jitter_conv2d_weights(
@@ -149,3 +173,92 @@ class GradientReversalNode(Function):
             torch.Tensor: negative gradient
         """
         return gradient.neg()
+
+
+class WeightMovingAverage:
+    """Utility for updating a model that is a moving average of another. """
+    def __init__(
+        self,
+        source: nn.Module,
+        average: nn.Module,
+        momentum: float
+    ) -> None:
+        """
+        Args:
+            source (nn.Module): model being trained (ws)
+            average (nn.Module): running weight average (wa)
+            momentum (float): amount current average counts in new average (m)
+        """
+        self._source = source
+        self._average = average
+        self._momentum = momentum
+
+    def step(self) -> None:
+        """Apply moving average weight update: wa = m * wa + (1 - m) * ws. """
+        average_state = self._average.state_dict()  # references, not copies
+        for param, value in self._source.state_dict().items():
+            average_state[param] *= self._momentum
+            average_state[param] += (1 - self._momentum) * value
+
+
+class ModelEnsemble(nn.Module):
+    """Utility for working w/model ensembles"""
+    def __init__(
+        self,
+        models: Sequence[nn.Module],
+        copy: bool = False
+    ) -> None:
+        super().__init__()
+        if copy:
+            models = [deepcopy(curr) for curr in models]
+        self._models = nn.ModuleList(models)
+
+    def forward(self, inp: torch.Tensor) -> List[Any]:
+        """Run data through ensemble.
+
+        Args:
+            inp (torch.Tensor): input data
+
+        Returns:
+            List[Any]: list of whatever comes out of the ensemble models
+        """
+        return [curr(inp) for curr in self._models]
+
+
+def spectral_mixup(
+    img_a: np.ndarray,
+    img_b: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Swap the magnitude of two images (must be same shape).
+
+    Args:
+        img_a (np.ndarray): first image ... CHW
+        img_b (np.ndarray): second image ... CHW
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: magnitude-swapped images
+    """
+    assert img_a.shape[0] in [1, 3]
+    assert img_b.shape[0] in [1, 3]
+
+    # spectral decomposition
+    spec_a = fft.fft2(img_a)
+    mag_a, phase_a = np.abs(spec_a), np.angle(spec_a)
+    spec_b = fft.fft2(img_b)
+    mag_b, phase_b = np.abs(spec_b), np.angle(spec_b)
+
+    # mixup in frequency domain
+    new_a = mag_b * np.exp(1j * phase_a)
+    new_b = mag_a * np.exp(1j * phase_b)
+
+    # back to spatial domain and post-process
+    new_a = fft.ifft2(new_a)
+    new_a = new_a - new_a.min()
+    new_a = new_a / new_a.max()
+    new_a = np.real(new_a)
+    new_b = fft.ifft2(new_b)
+    new_b = new_b - new_b.min()
+    new_b = new_b / new_b.max()
+    new_b = np.real(new_b)
+
+    return new_a, new_b

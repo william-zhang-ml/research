@@ -1,6 +1,7 @@
 """Training template script based on classification. """
 import importlib
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Tuple
 import hydra
@@ -165,6 +166,7 @@ def main(config: DictConfig = None) -> None:
     """
     logging.info('running with torch %s', torch.__version__)
     outdir = Path(HydraConfig.get().runtime.output_dir)
+    os.makedirs(outdir / 'checkpoints', exist_ok=True)
     train_board = SummaryWriter(log_dir=f'tensorboard/train-{outdir.stem}')
     valid_board = SummaryWriter(log_dir=f'tensorboard/valid-{outdir.stem}')
     device = torch.device(config.device)
@@ -219,7 +221,7 @@ def main(config: DictConfig = None) -> None:
         progbar = tqdm(range(config.num_epochs))
     num_batches = len(train_loader)
     step = 0
-    for i_epoch in progbar:
+    for epoch in progbar:
         for i_batch, (imgs, labels) in enumerate(train_loader):
             step += 1
 
@@ -250,9 +252,9 @@ def main(config: DictConfig = None) -> None:
         if 'scheduler' in locals():
             scheduler.step()
 
-        # periodic validation during training
+        # periodic validation and checkpoint during training
         model.eval()
-        if (i_epoch + 1) % config.epochs_per_valid == 0:
+        if (epoch + 1) % config.epochs_per_valid == 0:
             losses, metric_vals = do_eval_epoch(
                 valid_loader,
                 model,
@@ -261,6 +263,21 @@ def main(config: DictConfig = None) -> None:
             )
             add_dict_to_board(losses, valid_board, step)
             add_dict_to_board(metric_vals, valid_board, step)
+
+            # save checkpoint
+            checkpoint = {
+                'epoch': epoch + 1,
+                'step': step,
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': None
+            }
+            if 'scheduler' in locals():
+                checkpoint['scheduler'] = scheduler.state_dict()
+            torch.save(
+                checkpoint,
+                outdir / 'checkpoints' / f'{epoch + 1:03d}.pt'
+            )
         model.train()
 
     # final validation
@@ -277,19 +294,20 @@ def main(config: DictConfig = None) -> None:
     log_dict(metric_vals)
 
     # save final model
-    if not config.plumbing:
-        torch.onnx.export(
-            model,
-            imgs.to(device),
-            outdir / 'final.onnx',
-            input_names=['input'],
-            output_names=['output'],
-            dynamic_axes={
-                'input': {0: 'batch', 1: 'row', 2: 'col'}
-            }
-        )
+    logging.info('export final weights to ONNX')
+    torch.onnx.export(
+        model,
+        imgs.to(device),
+        outdir / 'final.onnx',
+        input_names=['input'],
+        output_names=['output'],
+        dynamic_axes={
+            'input': {0: 'batch', 2: 'row', 3: 'col'}
+        }
+    )
+
+    logging.info('script ran to completion.')
 
 
 if __name__ == '__main__':
     main()
-    logging.info('script ran to completion.')

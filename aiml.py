@@ -262,3 +262,21 @@ def spectral_mixup(
     new_b = np.real(new_b)
 
     return new_a, new_b
+
+
+def downsample_features(
+    features: torch.Tensor,
+    row_stride: int,
+    col_stride: int
+) -> torch.Tensor:
+    """Downsample a feature map.
+
+    Args:
+        features (torch.Tensor): original feature map
+        row_stride (int): amount to downsample rows
+        col_stride (int): amount to downsample columns
+
+    Returns:
+        torch.Tensor: new feature map
+    """
+    return features[:, :, ::row_stride, ::col_stride]

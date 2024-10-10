@@ -1,9 +1,12 @@
 """Miscellaneous research code. """
+import io
 from typing import Callable, Dict, Sequence, Tuple, Union
 import git
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
+from PIL import Image
+import requests
 from sklearn.manifold import TSNE
 from sklearn.metrics import ConfusionMatrixDisplay
 import torch
@@ -18,6 +21,15 @@ def get_repo_hash() -> str:
     """
     repo = git.Repo(search_parent_directories=True)
     return repo.head.commit.hexsha
+
+
+def get_image(url: str) -> np.ndarray:
+    """Get an image from the internet. """
+    resp = requests.get(url, timeout=5)
+    stream = io.BytesIO(resp.content)
+    with Image.open(stream) as img:
+        np_ra = np.array(img)
+    return np_ra.astype(np.float32) / 255
 
 
 def bootstrap(

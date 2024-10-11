@@ -1,6 +1,6 @@
 """Miscellaneous AI/ML code. """
 from copy import deepcopy
-from typing import Any, List, Sequence, Tuple, Union
+from typing import Any, Callable, List, Sequence, Tuple, Union
 import numpy as np
 from scipy import fft
 import torch
@@ -8,6 +8,7 @@ from torch import nn
 from torch.autograd import Function
 from torch.nn.functional import cross_entropy, normalize
 from torch.utils.data import Dataset
+from torchvision.models.feature_extraction import create_feature_extractor
 
 
 def count_params(module: nn.Module) -> int:
@@ -68,6 +69,20 @@ def jitter_conv2d_weights(
         else:
             jitter_conv2d_weights(submodule, stdev, True)
     return module
+
+
+def create_feature_extractor_2(model: nn.Module, node: str) -> Callable:
+    """Synactic-sugar for torchvision create_feature_extractor (one output).
+
+    Args:
+        model (nn.Module): model to extract features from
+        node (str): node/layer to extract features from
+
+    Returns:
+        Callable: callable feature extractor that outputs a tensor
+    """
+    extractor = create_feature_extractor(model, return_nodes=[node])
+    return lambda inp: extractor(inp)[node]
 
 
 def cross_entropy_w_pseudolabels(

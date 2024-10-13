@@ -84,6 +84,21 @@ class EmpiricalDistribution:
         return idcs / len(self._samples)
 
 
+def get_bhattacharyya_dist(dist_A: np.ndarray, dist_B: np.ndarray) -> float:
+    """Calculate distance between two histograms.
+
+    Args:
+        dist_A (np.ndarray): empirical distribution A
+        dist_B (np.ndarray): empirical distribution B
+
+    Returns:
+        float: distance
+    """
+    dist_A = dist_A / dist_A.sum()  # normalize
+    dist_B = dist_B / dist_B.sum()  # normalize
+    return -np.log((np.sqrt(dist_A * dist_B).sum()))
+
+
 def get_pca_contour(data: np.ndarray, stdev: float = 3) -> np.ndarray:
     """Estimate a data-aligned/centered contour using SVD/PCA/whitening math.
 

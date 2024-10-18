@@ -1,7 +1,28 @@
 """
-This module implements "SCAN: Learning to Classify Images without Labels".
+This module implements "SCAN: Learning to Classify Images without Labels",
+which draws from
+"Unsupervised Feature Learning via Non-Parametric Instance Discrimination".
 """
 import torch
+from torch.nn.functional import normalize
+
+
+def nonparameteric_softmax_loss(
+    emb: torch.Tensor,
+    temperature: float = 1.
+) -> torch.Tensor:
+    """Compute nonparametric softmax loss.
+
+    Args:
+        emb (torch.Tensor): image embeddings (B, D)
+        temperature (float): logit scaling coefficient
+    
+    Returns:
+        torch.Tensor:
+    """
+    emb = normalize(emb, p=2, dim=-1)
+    logits = (emb @ emb.transpose(-2, -1)) / temperature
+    return logits.softmax(dim=-1).diag().log().sum().neg()
 
 
 def scan_loss(

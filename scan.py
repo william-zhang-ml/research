@@ -7,22 +7,50 @@ import torch
 from torch.nn.functional import normalize
 
 
+def instance_softmax(
+    features: torch.Tensor,
+    other: torch.Tensor,
+    temperature: float = 1.,
+    normalize_other: bool = False
+) -> torch.Tensor:
+    """Compute instance-to-instance-based softmax.
+
+    Args:
+        features (torch.Tensor): instances of interest
+        other (torch.Tensor): instance features in lieu of class prototypes
+        temperature (float): logit scaling coefficient
+        normalize_other (bool): whether to normalize instance prototypes
+
+    Returns:
+        torch.Tensor: features-vs-other softmax
+    """
+    features = normalize(features, p=2, dim=-1)
+    if normalize_other:
+        other = normalize(other, p=2, dim=-1)
+    logits = (features @ other.transpose(-2, -1)) / temperature
+    return logits.softmax(dim=-1)
+
+
 def nonparameteric_softmax_loss(
-    emb: torch.Tensor,
+    features: torch.Tensor,
     temperature: float = 1.
 ) -> torch.Tensor:
     """Compute nonparametric softmax loss.
 
     Args:
-        emb (torch.Tensor): image embeddings (B, D)
+        features (torch.Tensor): image embeddings (B, D)
         temperature (float): logit scaling coefficient
-    
+
     Returns:
         torch.Tensor:
     """
-    emb = normalize(emb, p=2, dim=-1)
-    logits = (emb @ emb.transpose(-2, -1)) / temperature
-    return logits.softmax(dim=-1).diag().log().sum().neg()
+    soft = instance_softmax(
+        features=features,
+        other=features,
+        temperature=temperature,
+        normalize_other=True
+    )
+    return soft.diag().log().sum().neg()
 
 
 def scan_loss(
